@@ -1,0 +1,67 @@
+---
+- name: Allow IPv4 Forwarding
+  sysctl: name=net.ipv4.ip_forward value=1 state=present
+
+- name: Set IPv4 RP all filter
+  sysctl: name=net.ipv4.conf.all.rp_filter=0 value=0 state=present
+
+- name: Set IPv4 RP default filter
+  sysctl: name=net.ipv4.conf.default.rp_filter value=0 state=present
+
+- name: Configure eth3 interface
+  template: src=eth3.cfg.j2 dest=/etc/network/interfaces.d/eth3.cfg
+
+- name: Bring eth3 up
+  shell: ip link set eth3 up 
+
+- name: Install neutron
+  apt: name={{item}} state=present
+  with_items: 
+        - neutron-plugin-ml2
+        - neutron-plugin-openvswitch-agent
+        - openvswitch-datapath-dkms
+        - neutron-l3-agent
+        - neutron-dhcp-agent
+
+- name: Configure Neutron
+  template: src=neutron.conf.j2 dest=/etc/neutron/neutron.conf
+  notify: restart openvswitch plugin
+
+- name: Configure L3 Agent 
+  template: src=l3_agent.ini.j2 dest=/etc/neutron/l3_agent.ini
+  notify: restart neutron l3 agent
+
+- name: Configure DHCP Agent 
+  template: src=dhcp_agent.ini.j2 dest=/etc/neutron/dhcp_agent.ini
+  notify: restart neutron dhcp agent
+
+- name: Configure dnsmasq 
+  template: src=dnsmasq-neutron.conf.j2 dest=/etc/neutron/dnsmasq-neutron.conf
+
+- name: Configure metadata agent 
+  template: src=metadata_agent.ini.j2 dest=/etc/neutron/metadata_agent.ini
+  notify: restart neutron metadata agent
+
+- name: Configure ml2 plugin 
+  template: src=ml2_conf.ini.j2 dest=/etc/neutron/plugins/ml2/ml2_conf.ini
+
+- name: Add internal bridge
+  openvswitch_bridge: bridge=br-int state=present
+
+- name: Add external bridge
+  openvswitch_bridge: bridge=br-ex state=present
+
+- name: Add eth3 to external bridge
+  openvswitch_port: bridge=br-ex port=eth3 state=present
+  args:
+
+- name: Configure br-ext interface
+  template: src=br-ex.cfg.j2 dest=/etc/network/interfaces.d/br-ex.cfg
+  notify: 
+      - restart openvswitch plugin
+      - restart neutron l3 agent
+      - restart neutron dhcp agent
+      - restart neutron metadata agent 
+
+- name: Bring br-ex up
+  shell: ip link set br-ex up 

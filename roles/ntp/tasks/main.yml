@@ -1,0 +1,7 @@
+---
+- name: Install NTP server
+  apt: name=ntp state=present
+
+- name: Configure NTP server
+  template: src=ntp.conf.j2 dest=/etc/ntp.conf
+  notify: reload ntp server

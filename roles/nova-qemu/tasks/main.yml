@@ -1,0 +1,14 @@
+---
+- name: Install Compute KVM
+  apt: name=nova-compute-kvm state=present
+
+- name: Configure Nova
+  template: src=nova.conf.j2 dest=/etc/nova/nova.conf
+  notify: restart nova-qemu service
+
+- name: Configure Nova KVM
+  template: src=nova-compute.conf.j2 dest=/etc/nova/nova-compute.conf
+  notify: restart nova-qemu service
+
+- name: Remove default SQLite database
+  file: name=/var/lib/nova/nova.sqlite state=absent

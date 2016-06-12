@@ -1,0 +1,17 @@
+---
+- name: Install Horizon
+  apt: name={{item}} state=present
+  with_items:
+        - apache2
+        - memcached
+        - libapache2-mod-wsgi
+        - openstack-dashboard
+
+- name: Remove Ubuntu Horizon theme
+  apt: name=openstack-dashboard-ubuntu-theme state=absent purge=yes
+
+- name: Configure Horizon
+  template: src=local_settings.py.j2 dest=/etc/openstack-dashboard/local_settings.py
+  notify: 
+        - restart apache2
+        - restart memcached

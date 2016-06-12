@@ -1,0 +1,71 @@
+---
+- name: Install Glance
+  apt: name={{item}} state=present
+  with_items:
+          - python-glanceclient
+          - glance
+
+- name: Configure Glance (API)
+  template: src=glance-api.conf.j2 dest=/etc/glance/glance-api.conf
+  notify: restart glance-api service
+
+- name: Configure Glance (Registry)
+  template: src=glance-registry.conf.j2 dest=/etc/glance/glance-registry.conf
+  notify: restart glance-registry service
+
+- name: Restart Glance
+  service: name="{{item}}" state=restarted
+  with_items:
+          - glance-api
+          - glance-registry
+
+
+- name: Create tables
+  command: su - -s /bin/sh -c 'glance-manage db_sync' glance
+
+- name: Create glance user
+  command: 'keystone user-create --name={{glance_user_name}} --pass={{glance_password}} --email={{glance_email}}'
+  args:
+          creates: /root/.glance_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{glance_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+- name: Link glance user to admin role
+  command: 'keystone user-role-add --user=glance --tenant=service --role=admin'
+  args:
+          creates: /root/.glance_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{glance_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+
+- name: Create the glance service
+  command: 'keystone service-create --name=glance --type=image --description="OpenStack Image Service"'
+  args:
+          creates: /root/.glance_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{glance_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+- name: Create glance endpoint
+  shell: "keystone endpoint-create --service-id $(keystone service-list | awk '/ image / {print $2}') --publicurl http://controller:9292 --internalurl http://controller:9292 --admin http://controller:9292 --region RegionOne"
+  args:
+          creates: /root/.glance_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{glance_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'         
+
+- name: Donwload Cirros
+  get_url: url=http://download.cirros-cloud.net/0.3.1/cirros-0.3.1-x86_64-disk.img dest=/tmp/cirros031.img
+
+- name: Insert image
+  shell: ". /root/admin-openrc.sh; glance image-create --name=cirros031.img --disk-format=qcow2 --container-format=bare --is-public=true < /tmp/cirros031.img" 
+  args:
+          creates: /root/.glance_provisioning
+
+
+- name: Create provisioning confirmation file for Glance
+  command: touch /root/.glance_provisioning
+  args:
+        creates: /root/.glance_provisioning

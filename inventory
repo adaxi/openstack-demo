@@ -1,0 +1,4 @@
+[openstack]
+controller ansible_user=vagrant
+network ansible_user=vagrant
+compute1 ansible_user=vagrant

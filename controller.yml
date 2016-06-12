@@ -1,0 +1,87 @@
+- name: Installs an OpenStack Controller Node
+  hosts: controller
+  become: true
+  pre_tasks:
+          - apt: update_cache=yes
+  roles:
+          - { role: hosts }
+          - { role: ntp,
+              ntp_restrict: [
+                "-4 default kod notrap nomodify",
+                "-6 default kod notrap nomodify"
+              ]
+            }
+          - { role: database-client }
+          - { role: database,
+              database_users: [
+                { user: '{{keystone_database_user}}', password: '{{keystone_database_password}}', grants: '{{keystone_database_name}}.*:ALL', host: 'localhost' },
+                { user: '{{keystone_database_user}}', password: '{{keystone_database_password}}', grants: '{{keystone_database_name}}.*:ALL', host: '%' },
+                { user: '{{glance_database_user}}',   password: '{{glance_database_password}}',   grants: '{{glance_database_name}}.*:ALL',   host: 'localhost' },
+                { user: '{{glance_database_user}}',   password: '{{glance_database_password}}',   grants: '{{glance_database_name}}.*:ALL',   host: '%' },
+                { user: '{{nova_database_user}}',     password: '{{nova_database_password}}',     grants: '{{nova_database_name}}.*:ALL',     host: 'localhost' },
+                { user: '{{nova_database_user}}',     password: '{{nova_database_password}}',     grants: '{{nova_database_name}}.*:ALL',     host: '%' },
+                { user: '{{neutron_database_user}}',  password: '{{neutron_database_password}}',  grants: '{{neutron_database_name}}.*:ALL',  host: 'localhost' },
+                { user: '{{neutron_database_user}}',  password: '{{neutron_database_password}}',  grants: '{{neutron_database_name}}.*:ALL',  host: '%' },
+              ],
+              database_databases: [
+                { name: '{{keystone_database_name}}' },
+                { name: '{{glance_database_name}}' },
+                { name: '{{nova_database_name}}' },
+                { name: '{{neutron_database_name}}' },
+              ]
+            }
+          - { role: mq,
+            }
+          - { role: keystone,
+              keystone_database_dsn: "mysql://{{keystone_database_user}}:{{keystone_database_password}}@controller/{{keystone_database_name}}",
+              keystone_bootstrap_token: "{{bootstrap_token}}",
+
+              keystone_admin_user_name: '{{admin_user_name}}',
+              keystone_admin_password: '{{admin_password}}',
+              keystone_admin_email: '{{admin_email}}',
+
+              keystone_first_user_name: adaxi,
+              keystone_first_user_password: 12345678aA,
+              keystone_first_user_email: 'dev@adaxisoft.be',
+              keystone_first_user_tenant: 'adaxisoft'
+            }
+          - { role: glance,
+              glance_database_dsn: "mysql://{{glance_database_user}}:{{glance_database_password}}@controller/{{glance_database_name}}",
+              glance_bootstrap_token: "{{bootstrap_token}}",
+
+              glance_admin_user_name: '{{admin_user_name}}',
+              glance_admin_password: '{{admin_password}}',
+              glance_admin_email: '{{admin_email}}',
+           }
+          - { role: nova,
+              nova_database_dsn: "mysql://{{nova_database_user}}:{{nova_database_password}}@controller/{{nova_database_name}}",
+              nova_bootstrap_token: "{{bootstrap_token}}",
+
+              # same as in neutron-instance service
+              nova_metadata_shared_secret: '{{metadata_shared_secret}}',
+          
+              nova_admin_user_name: '{{admin_user_name}}',
+              nova_admin_password: '{{admin_password}}',
+              nova_admin_email: '{{admin_email}}',
+     
+              nova_neutron_user_name: '{{neutron_user_name}}',
+              nova_neutron_password: '{{neutron_password}}',
+
+              nova_mq_user_name: '{{mq_user_name}}',
+              nova_mq_password: '{{mq_password}}'
+            }
+          - { role: neutron,
+              neutron_database_dsn: "mysql://{{neutron_database_user}}:{{neutron_database_password}}@controller/{{neutron_database_name}}",
+              neutron_bootstrap_token: "{{bootstrap_token}}",
+
+              neutron_admin_user_name: '{{admin_user_name}}',
+              neutron_admin_password: '{{admin_password}}',
+              neutron_admin_email: '{{admin_email}}',
+              
+              neutron_nova_user_name: '{{nova_user_name}}',
+              neutron_nova_password: '{{nova_password}}',
+
+              neutron_mq_user_name: '{{mq_user_name}}',
+              neutron_mq_password: '{{mq_password}}'
+            }
+          - { role: horizon }

@@ -1,0 +1,69 @@
+---
+- name: Install Nova Service
+  apt: name={{item}} state=present
+  with_items:
+          - nova-api
+          - nova-cert
+          - nova-conductor
+          - nova-consoleauth
+          - nova-novncproxy
+          - nova-scheduler
+          - python-novaclient
+ 
+- name: Configure Nova
+  template: src=nova.conf.j2 dest=/etc/nova/nova.conf
+  notify: restart nova-api service
+
+- name: Restart Nova
+  service: name="{{item}}" state=restarted
+  with_items:
+          - nova-api
+          - nova-cert
+          - nova-conductor
+          - nova-consoleauth
+          - nova-novncproxy
+          - nova-scheduler
+
+- name: Create tables
+  command: su - -s /bin/sh -c 'nova-manage db sync' nova
+
+- name: Remove default SQLite database
+  file: name=/var/lib/nova/nova.sqlite state=absent
+
+- name: Create nova user
+  command: 'keystone user-create --name={{nova_user_name}} --pass={{nova_password}} --email={{nova_email}}'
+  args:
+          creates: /root/.nova_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{nova_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+- name: Link nova user to admin role
+  command: 'keystone user-role-add --user=nova --tenant=service --role=admin'
+  args:
+          creates: /root/.nova_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{nova_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+
+- name: Create the nova service
+  command: 'keystone service-create --name=nova --type=compute --description="OpenStack Compute"'
+  args:
+          creates: /root/.nova_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{nova_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+- name: Create nova endpoint
+  shell: "keystone endpoint-create --service-id $(keystone service-list | awk '/ compute / {print $2}') --publicurl http://controller:8774/v2/%\\(tenant_id\\)s --internalurl http://controller:8774/v2/%\\(tenant_id\\)s --adminurl http://controller:8774/v2/%\\(tenant_id\\)s --region RegionOne"
+  args:
+          creates: /root/.nova_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{nova_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'         
+
+- name: Create provisioning confirmation file for Nova
+  command: touch /root/.nova_provisioning
+  args:
+        creates: /root/.nova_provisioning

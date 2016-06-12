@@ -1,0 +1,6 @@
+auto br-ex
+iface br-ex inet static
+	pre-up ip link set eth3 up
+	post-down ip link set eth3 down
+        address 192.168.100.52
+        netmask 255.255.255.0

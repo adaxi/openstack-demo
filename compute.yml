@@ -1,0 +1,36 @@
+- name: Installs an OpenStack Compute Node
+  hosts: 
+        - compute1
+  become: true
+  pre_tasks:
+          - apt: update_cache=yes
+  roles:
+          - { role: hosts }
+          - { role: ntp, 
+              ntp_servers: [ 
+                "controller iburst"
+              ],
+              ntp_fallback_servers: [
+                "controller iburst"
+              ]
+            }
+          - { role: database-client }
+          - { role: nova-qemu, 
+              nova_database_dsn: "mysql://{{nova_database_user}}:{{nova_database_password}}@controller/{{nova_database_name}}",
+
+              nova_neutron_user_name: '{{neutron_user_name}}',
+              nova_neutron_password: '{{neutron_password}}',
+
+              nova_mq_user_name: '{{mq_user_name}}',
+              nova_mq_password: '{{mq_password}}'
+            }
+          - { role: neutron-compute, 
+              neutron_compute_neutron_user_name: '{{neutron_user_name}}',
+              neutron_compute_neutron_password: '{{neutron_password}}',
+
+              # same as in the nova configuration
+              neutron_compute_metadata_shared_secret: '{{metadata_shared_secret}}',
+
+              neutron_compute_mq_user_name: '{{mq_user_name}}',
+              neutron_compute_mq_password: '{{mq_password}}'
+            }

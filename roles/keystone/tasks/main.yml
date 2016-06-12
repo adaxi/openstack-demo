@@ -1,0 +1,185 @@
+---
+- name: Install Keystone
+  apt: name='{{item}}' state=present
+  with_items:
+        - keystone
+        - python-keystoneclient
+
+- name: Configure Keystone
+  template: src=keystone.conf.j2 dest=/etc/keystone/keystone.conf mode=0644
+  notify: restart keystone service
+
+- name: Restart Keystone
+  service: name=keystone state=restarted
+
+- name: Remove default SQLite database
+  file: name=/var/lib/keystone/keystone.db state=absent
+  when: not (keystone_database_dsn == "sqlite:////var/lib/keystone/keystone.db")
+
+- name: Create tables
+  command: su - -s /bin/sh -c 'keystone-manage db_sync' keystone
+
+- name: Install token flush cron file
+  template: src=keystone.cron.j2 dest=/var/spool/cron/crontabs/keystone
+
+#- name: Create keystone identity service
+#  keystone:
+#          command: "ensure_service"
+#          service_name: "keystone"
+#          service_type: "identity"
+#          description: "OpenStack Identity"
+#          token: '{{keystone_bootstrap_token}}'
+#          endpoint: 'http://controller:35357/v2.0'
+#  environment:
+#          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+#          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+#- name: Create keystone identity endpoint
+#  keystone:
+#        command: "ensure_endpoint"
+#        region_name: "RegionOne"
+#        service_name: "keystone"
+#        service_type: "identity"
+#        endpoint_list:
+#                - url: "http://controller:5000/v2.0"
+#                  interface: "internal"
+#                - url: "http://controller:5000/v2.0"
+#                  interface: "public"
+#                - url: "http://controller:35357/v2.0"
+#                  interface: "admin"
+
+#- name: Create admin user
+#  keystone:
+#          command: ensure_user
+#          user_name: admin
+#          password: '{{keystone_admin_password}}'
+#          email: '{{keystone_admin_email}}'
+#          token: '{{keystone_bootstrap_token}}'
+#          endpoint: 'http://controller:35357/v2.0'
+
+#- name: Create admin role
+#  keystone:
+#          command: ensure_role
+#          role_name: admin
+#          token: '{{keystone_bootstrap_token}}'
+#          endpoint: 'http://controller:35357/v2.0'
+
+#- name: Create admin tenant
+#  keystone:
+#          command: ensure_tenant
+#          tenant_name: admin
+#          desctiption: "Administrative Tenant"
+#          token: '{{keystone_bootstrap_token}}'
+#          endpoint: 'http://controller:35357/v2.0' 
+
+#- name: Link admin user to admin and _member_ role
+#  keystone:
+#          command: ensure_user_role 
+#          tenant_name: admin
+#          role_name: '{{item}}'
+#          user_name: admin        
+#          desctiption: "Administrative Tenant"
+#          token: '{{keystone_bootstrap_token}}'
+#          endpoint: 'http://controller:35357/v2.0'
+#  with_items:
+#           - admin
+#           - _member_ 
+
+- name: Create keystone identity service
+  shell: "keystone service-create --name=keystone --type=identity --description='OpenStack Identity'"
+  args:
+          creates: /root/.keystone_provisioning
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+
+- name: Create keystone identity endpoint
+  shell: "keystone endpoint-create --service-id=$(keystone service-list | awk '/ identity / {print $2}') --publicurl=http://controller:5000/v2.0 --internalurl=http://controller:5000/v2.0 --admin=http://controller:35357/v2.0 --region RegionOne"
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/.keystone_provisioning
+
+- name: Create provisioning confirmation file for Keystone
+  command: touch /root/.keystone_provisioning
+  args:
+        creates: /root/.keystone_provisioning
+
+- name: Create keystone admin user
+  command: 'keystone user-create --name={{keystone_admin_user_name}} --pass={{keystone_admin_password}} --email={{keystone_admin_email}}'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/admin-openrc.sh
+
+- name: Create keystone admin role
+  command: 'keystone role-create --name=admin'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/admin-openrc.sh
+
+- name: Create keystone admin tenant
+  command: 'keystone tenant-create --name=admin --description="Administrative Tenant"'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/admin-openrc.sh
+
+- name: Link admin user to admin role
+  command: 'keystone user-role-add --user={{keystone_admin_user_name}} --tenant=admin --role=admin'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/admin-openrc.sh
+
+- name: Link admin user to _member_ role
+  command: 'keystone user-role-add --user={{keystone_admin_user_name}} --tenant=admin --role=_member_'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/admin-openrc.sh
+
+- name: Create admin-openrc.sh script
+  template: src=admin-openrc.sh.j2 dest=/root/admin-openrc.sh mode=0700
+
+- name: Create keystone first user
+  command: 'keystone user-create --name={{keystone_first_user_name}} --pass={{keystone_first_user_password}} --email={{keystone_first_user_email}}'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/first_user-openrc.sh
+
+- name: Create keystone first user tenant
+  command: 'keystone tenant-create --name={{keystone_first_user_tenant}} --description="{{keystone_first_user_tenant}} Tenant"'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/first_user-openrc.sh
+
+- name: Link first user to _member_ role
+  command: 'keystone user-role-add --user={{keystone_first_user_name}} --tenant={{keystone_first_user_tenant}} --role=_member_'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/first_user-openrc.sh
+
+- name: Create keystone service tenant
+  command: 'keystone tenant-create --name=service --description="Service Tenant"'
+  environment:
+          OS_SERVICE_TOKEN: '{{keystone_bootstrap_token}}'
+          OS_SERVICE_ENDPOINT: 'http://controller:35357/v2.0'
+  args:
+          creates: /root/first_user-openrc.sh
+
+- name: Create first_user-openrc.sh script
+  template: src=first_user-openrc.sh.j2 dest=/root/first_user-openrc.sh mode=0700

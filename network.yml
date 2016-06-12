@@ -1,0 +1,28 @@
+---
+- name: Installs an OpenStack Network Node
+  hosts: network
+  become: true
+  pre_tasks:
+          - apt: update_cache=yes
+  roles:
+          - { role: hosts }
+          - { role: ntp,
+              ntp_servers: [
+                "controller iburst"
+              ],
+              ntp_fallback_servers: [
+                "controller iburst"                
+              ]
+            }
+          - { role: database-client }
+          - { role: neutron-network,
+
+              neutron_network_neutron_user_name: '{{neutron_user_name}}',
+              neutron_network_neutron_password: '{{neutron_password}}',
+
+              # same as in the nova configuration
+              neutron_network_metadata_shared_secret: '{{metadata_shared_secret}}',
+
+              neutron_network_mq_user_name: '{{mq_user_name}}',
+              neutron_network_mq_password: '{{mq_password}}'
+            }

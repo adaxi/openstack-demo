@@ -1,0 +1,4 @@
+- name: restart neutron service
+  service: name={{item}} state=restarted
+  with_items:
+          - neutron-server

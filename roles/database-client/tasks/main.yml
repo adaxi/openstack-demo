@@ -1,0 +1,6 @@
+---
+- name: Install Python MySQL Library
+  apt: name=python-mysqldb state=present
+  tags: database-client
+
+

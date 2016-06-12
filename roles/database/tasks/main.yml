@@ -1,0 +1,61 @@
+---
+- name: Ensure python-mysqldb is present
+  apt: name=python-mysqldb state=present
+
+- name: Install MariaDB
+  apt: name=mariadb-server state=present
+  register: database_installed_packages
+
+
+- name: Get list of hosts on new system.
+  command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = "root" ORDER BY (Host="localhost") ASC'
+  register: mysql_root_hosts
+  changed_when: false
+  when: (database_installed_packages | changed)
+
+# Note: We do not use mysql_user for this operation, as it doesn't always update
+# the root password correctly. See: https://goo.gl/MSOejW
+- name: Update MySQL root password for localhost root account.
+  shell: >
+    mysql -NBe
+    'SET PASSWORD FOR "root"@"{{ item }}" = PASSWORD("{{ database_root_password }}");'
+  with_items: '{{ mysql_root_hosts.stdout_lines | default([]) }}'
+  when: (mysql_root_hosts is defined) and (database_installed_packages | changed)
+
+- name: Get list of hosts for the anonymous user
+  command: mysql -u root -p'{{ database_root_password }}' -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
+  register: mysql_anonymous_hosts
+  changed_when: false
+
+- name: Remove anonymous MySQL users
+  mysql_user:
+        login_user: root
+        login_password: '{{ database_root_password }}'
+        name: ""
+        host: "{{ item }}"
+        state: absent
+  with_items: '{{ mysql_anonymous_hosts.stdout_lines | default([]) }}'
+
+- name: Bind MySQL to Management Network
+  template: src=my.cnf.j2 dest=/etc/mysql/my.cnf
+  notify: restart mysql database
+
+- name: Create databases
+  mysql_db:
+          login_user: root
+          login_password: '{{ database_root_password }}'
+          name: '{{ item.name }}'
+          state: present
+          collation: 'utf8_general_ci'
+          encoding: 'utf8'
+  with_items: '{{ database_databases | default([]) }}'
+
+- name: Create users
+  mysql_user: 
+          login_user: root
+          login_password: '{{ database_root_password }}'
+          name: '{{item.user}}'
+          password: '{{item.password}}'
+          host: '{{item.host}}'
+          priv: "{{ item.grants | default('*.*:ALL') }}"
+  with_items: '{{ database_users | default([]) }}'

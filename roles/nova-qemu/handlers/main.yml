@@ -1,0 +1,4 @@
+- name: restart nova-qemu service
+  service: name={{item}} state=restarted
+  with_items:
+          - nova-compute

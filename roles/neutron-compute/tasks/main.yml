@@ -1,0 +1,25 @@
+---
+- name: Set IPv4 RP all filter
+  sysctl: name=net.ipv4.conf.all.rp_filter=0 value=0 state=present
+
+- name: Set IPv4 RP default filter
+  sysctl: name=net.ipv4.conf.default.rp_filter value=0 state=present
+
+- name: Install neutron
+  apt: name={{item}} state=present
+  with_items: 
+        - neutron-common
+        - neutron-plugin-ml2
+        - neutron-plugin-openvswitch-agent
+        - openvswitch-datapath-dkms
+
+- name: Configure Neutron
+  template: src=neutron.conf.j2 dest=/etc/neutron/neutron.conf
+
+- name: Configure ml2 plugin 
+  template: src=ml2_conf.ini.j2 dest=/etc/neutron/plugins/ml2/ml2_conf.ini
+
+- name: Add internal bridge
+  openvswitch_bridge: bridge=br-int state=present
+
+

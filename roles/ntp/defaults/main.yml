@@ -1,0 +1,13 @@
+---
+ntp_servers:
+        - 0.ubuntu.pool.ntp.org
+        - 1.ubuntu.pool.ntp.org
+        - 2.ubuntu.pool.ntp.org
+        - 3.ubuntu.pool.ntp.org
+
+ntp_fallback_servers:
+        - npt.ubuntu.com
+
+ntp_restrict:
+        - "-4 default kod notrap nomodify nopeer noquery"
+        - "-6 default kod notrap nomodify nopeer noquery"
