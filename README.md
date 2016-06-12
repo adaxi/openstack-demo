@@ -1,6 +1,8 @@
 
-VAGRANTFILE 
-===========
+OpenStack Demo 
+==============
+
+I wrote this to learn about OpenStack.
 
 This file prepares the infrastructure to deploy a demo environement
 of [OpenStack Icehouse](http://docs.openstack.org/icehouse/install-guide/install/apt/content/ch_overview.html)
